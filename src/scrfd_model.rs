@@ -300,50 +300,6 @@ impl FaceAligner {
         img: &Mat,
         landmarks: &[Point2f],
         output_size: i32,
-    ) -> Result<Mat, Box<dyn Error>> {
-        if landmarks.len() < 5 {
-            return Err("5개 랜드마크 필요".into());
-        }
-
-        // ArcFace 템플릿 (112x112)
-        let arcface_template = vec![
-            (38.2946, 51.6963),
-            (73.5318, 51.5014),
-            (56.0252, 71.7366),
-            (41.5493, 92.3655),
-            (70.7299, 92.2041),
-        ];
-
-        let scale_ratio = output_size as f32 / 112.0;
-
-        let src_pts = Mat::from_slice(&landmarks[..5])?;
-
-        let dst_pts: Vec<Point2f> = arcface_template
-            .iter()
-            .map(|(x, y)| Point2f::new(x * scale_ratio, y * scale_ratio))
-            .collect();
-        let dst_mat = Mat::from_slice(&dst_pts)?;
-
-        let transform = imgproc::get_affine_transform(&src_pts, &dst_mat)?;
-
-        let mut aligned = Mat::default();
-        imgproc::warp_affine(
-            img,
-            &mut aligned,
-            &transform,
-            Size::new(output_size, output_size),
-            imgproc::INTER_LINEAR,
-            core::BORDER_CONSTANT,
-            core::Scalar::default(),
-        )?;
-
-        Ok(aligned)
-    }
-
-    pub fn align_face_5points(
-        img: &Mat,
-        landmarks: &[Point2f],
-        output_size: i32,
     ) -> opencv::Result<Mat> {
         if landmarks.len() != 5 {
             return Err(opencv::Error::new(core::StsBadArg, "랜드마크 5개 필요"));
@@ -351,11 +307,11 @@ impl FaceAligner {
 
         // ArcFace 5점 템플릿 (112x112 기준)
         let arcface_template = vec![
-            Point2f::new(38.2946, 51.6963),  // 왼쪽 눈
-            Point2f::new(73.5318, 51.5014),  // 오른쪽 눈
-            Point2f::new(56.0252, 71.7366),  // 코
-            Point2f::new(41.5493, 92.3655),  // 왼쪽 입
-            Point2f::new(70.7299, 92.2041),  // 오른쪽 입
+            Point2f::new(38.2946, 51.6963),
+            Point2f::new(73.5318, 51.5014),
+            Point2f::new(56.0252, 71.7366),
+            Point2f::new(41.5493, 92.3655),
+            Point2f::new(70.7299, 92.2041),
         ];
 
         let scale_ratio = output_size as f32 / 112.0;
@@ -364,10 +320,34 @@ impl FaceAligner {
             .map(|p| Point2f::new(p.x * scale_ratio, p.y * scale_ratio))
             .collect();
 
-        let src_mat = Mat::from_slice(landmarks)?;
-        let dst_mat = Mat::from_slice(&dst_pts)?;
+        // 1. 원본 랜드마크 (landmarks)를 $5 \times 2$ Mat으로 변환
 
-        // estimateAffinePartial2D 사용 (5점)
+        // x, y 좌표를 순서대로 Vec<f32>로 평탄화합니다.
+        let mut src_flat: Vec<f32> = Vec::with_capacity(landmarks.len() * 2);
+        for p in landmarks {
+            src_flat.push(p.x);
+            src_flat.push(p.y);
+        }
+
+        // Mat::from_slice를 사용하여 1차원 Mat을 생성한 후, reshape로 5행 2열로 만듭니다.
+        // 1(채널): Mat은 CV_32F 타입이므로 단일 채널을 사용하고 2열을 유지합니다.
+        let src_mat_1d = Mat::from_slice(&src_flat)?;
+        let src_mat = src_mat_1d.reshape(1, 5)?; // 1채널, 5행으로 재구성 (결과: 5행 2열)
+
+        // 2. 대상 랜드마크 (dst_pts)를 $5 \times 2$ Mat으로 변환
+
+        // x, y 좌표를 순서대로 Vec<f32>로 평탄화합니다.
+        let mut dst_flat: Vec<f32> = Vec::with_capacity(dst_pts.len() * 2);
+        for p in &dst_pts {
+            dst_flat.push(p.x);
+            dst_flat.push(p.y);
+        }
+
+        // Mat::from_slice로 1차원 Mat 생성 후, reshape로 5행 2열로 만듭니다.
+        let dst_mat_1d = Mat::from_slice(&dst_flat)?;
+        let dst_mat = dst_mat_1d.reshape(1, 5)?; // 1채널, 5행으로 재구성 (결과: 5행 2열)
+
+        // 3. 아핀 변환 행렬 추정
         let transform = estimate_affine_partial_2d(
             &src_mat,
             &dst_mat,
@@ -379,6 +359,7 @@ impl FaceAligner {
             10
         )?;
 
+        // 4. 이미지 변환
         let mut aligned = Mat::default();
         imgproc::warp_affine(
             img,
@@ -392,39 +373,4 @@ impl FaceAligner {
 
         Ok(aligned)
     }
-}
-
-pub fn detect_and_align(img_path: &str) -> Result<Vec<Mat>, Box<dyn Error>> {
-    let mut detector = SCRFDDetector::new(
-        "det_500m.onnx",
-        0.5,    // 신뢰도 임계값
-        0.4,    // NMS 임계값
-    )?;
-
-    let img = opencv::imgcodecs::imread(img_path, opencv::imgcodecs::IMREAD_COLOR)?;
-
-    if img.empty() {
-        return Err("이미지 로드 실패".into());
-    }
-
-    let detections = detector.detect(&img)?;
-
-    println!("총 {} 개의 얼굴 감지됨", detections.len());
-
-    let mut aligned_faces = Vec::new();
-    for (i, det) in detections.iter().enumerate() {
-        println!("Face {}: bbox=[{}, {}, {}, {}], conf={:.4}",
-                 i,
-                 det.bbox.x,
-                 det.bbox.y,
-                 det.bbox.x + det.bbox.width,
-                 det.bbox.y + det.bbox.height,
-                 det.confidence
-        );
-
-        let aligned = FaceAligner::align_face(&img, &det.landmarks, 112)?;
-        aligned_faces.push(aligned);
-    }
-
-    Ok(aligned_faces)
 }

@@ -121,7 +121,7 @@ fn main() -> Result<()>{
 
                 // landmark를 이용하여 이미지 정렬
                 let safe_bbox = Rect::new(0, 0, 112, 112);
-                let aligned = FaceAligner::align_face_5points(&cropped, &landmark.landmarks,112).unwrap();
+                let aligned = FaceAligner::align_face(&cropped, &landmark.landmarks, 112).unwrap();
                 let save_path = "aligned_face_112.png";
                 if let Err(e) = imgcodecs::imwrite(save_path, &aligned, &opencv::core::Vector::new()) {
                     eprintln!("⚠️ 이미지 저장 실패: {}", e);
