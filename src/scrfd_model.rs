@@ -306,12 +306,13 @@ impl FaceAligner {
         }
 
         // ArcFace 5점 템플릿 (112x112 기준)
+        let scale_factor = 1.0; // 얼굴을 더 크게
         let arcface_template = vec![
-            Point2f::new(38.2946, 51.6963),
-            Point2f::new(73.5318, 51.5014),
-            Point2f::new(56.0252, 71.7366),
-            Point2f::new(41.5493, 92.3655),
-            Point2f::new(70.7299, 92.2041),
+            Point2f::new(38.2946 * scale_factor, 51.6963 * scale_factor),
+            Point2f::new(73.5318 * scale_factor, 51.5014 * scale_factor),
+            Point2f::new(56.0252 * scale_factor, 71.7366 * scale_factor),
+            Point2f::new(41.5493 * scale_factor, 92.3655 * scale_factor),
+            Point2f::new(70.7299 * scale_factor, 92.2041 * scale_factor),
         ];
 
         let scale_ratio = output_size as f32 / 112.0;
