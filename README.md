@@ -9,6 +9,7 @@
     * Outputs:<br>
       regressors: [1, 896, 16]    // 단일이미지, 앵커박스수, 16 얼굴좌표영역[4] + 얼굴키폰인트(x,y) 6쌍 [12]
       classificators: [1, 896, 1] // 단일이미지, 앵커박스수, 신뢰도
+* https://huggingface.co/garavv/blazeface-onnx (blaze.onnx)
   
 ### Insightface  (Landmark + Recognition)
 * buffalo_s (https://drive.google.com/file/d/1pKIusApEfoHKDjeBTXYB3yOQ0EtTonNE/view?usp=sharing)

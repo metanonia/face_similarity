@@ -18,6 +18,11 @@ for inp in model.graph.input:
 print("Outputs:")
 for out in model.graph.output:
     print(f"  {out.name}: {[d.dim_value for d in out.type.tensor_type.shape.dim]}")
+for node in model.graph.node:
+    if node.op_type in ["Conv", "MaxPool", "AveragePool"]:
+        for attr in node.attribute:
+            if attr.name == "strides":
+                print(f"{node.name or node.op_type} - strides:", attr.ints)
 
 
 print("\n=== Recognition (Insightface) Model ===")

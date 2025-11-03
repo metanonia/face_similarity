@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+opencv = "0.96"
+ort = { version = "2.0.0-rc.10", features = ["load-dynamic", "ndarray"] }
+ndarray = "0.16.1"
+postgres = "0.19.12"
+pgvector = { version = "0.4.1", features = ["postgres"] }
