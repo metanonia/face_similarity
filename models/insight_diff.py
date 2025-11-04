@@ -64,6 +64,8 @@ aligned_image_paths = [
     "../images/aligned_face03_0_0.png",
     "../images/aligned_face04_0_0.png",
     "../images/aligned_face05_0_0.png",
+    "../images/aligned_face06_0_0.png",
+    "../images/aligned_face07_0_0.png",
 ]
 
 onnx_embeddings = {}
@@ -88,7 +90,7 @@ print("=" * 80)
 insightface_embeddings = {}
 print("\n✅ InsightFace 임베딩 추출 중...")
 
-for i in range(1, 7):  # face01.jpg ~ face06.jpg
+for i in range(1, 8):  # face01.jpg ~ face06.jpg
     img_path = f"../images/face{i:02d}.jpg"
 
     try:
