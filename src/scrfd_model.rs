@@ -1,3 +1,8 @@
+//! SCRFD (Sample and Computation Redistribution for Efficient Face Detection) Detector Module
+//!
+//! This module implements face detection using the SCRFD-500M model via ONNX Runtime.
+//! Models: det_500m.onnx (InsightFace)
+//!
 use opencv::{
     core::{self, Mat, Point2f, Rect, Size, CV_32F},
     imgproc,
@@ -5,7 +10,6 @@ use opencv::{
 
 use ndarray::Array4;
 use std::error::Error;
-use opencv::calib3d::{estimate_affine_partial_2d, LMEDS, RANSAC};
 use opencv::core::{no_array, AlgorithmHint, MatExprTraitConst, MatTrait, MatTraitConstManual, MatTraitManual, Rect2f, Scalar, Vector, BORDER_CONSTANT};
 use opencv::imgproc::INTER_LINEAR;
 use opencv::prelude::MatTraitConst;
@@ -33,18 +37,17 @@ impl SCRFDDetector {
         model_path: &str,
         conf_threshold: f32,
         nms_threshold: f32,
+        input_size: i32,
     ) -> Result<Self, Box<dyn Error>> {
         let session = Session::builder()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .commit_from_file(model_path)?;
 
-        println!("✅ ONNX 모델 로드 성공: {}", model_path);
-
         Ok(Self {
             session,
             conf_threshold,
             nms_threshold,
-            input_size: 320,
+            input_size,
         })
     }
 
@@ -130,7 +133,7 @@ impl SCRFDDetector {
         // NMS 적용
         let filtered = Self::apply_nms(&all_detections, self.nms_threshold)?;
 
-        println!("검출: {} -> NMS 후: {}", all_detections.len(), filtered.len());
+        // println!("검출: {} -> NMS 후: {}", all_detections.len(), filtered.len());
 
         Ok(filtered)
     }
@@ -170,14 +173,6 @@ impl SCRFDDetector {
         let scale_factor_x = orig_w as f32 / input_size as f32;
         let scale_factor_y = orig_h as f32 / input_size as f32;
 
-        println!("\n{}", "=".repeat(70));
-        println!("Stride: {}", stride);
-        println!("Grid: {}x{} = {} cells", feat_w, feat_h, num_grid_cells);
-        println!("Total  {} ({} anchors per cell)", score_data.len(), num_anchors_per_cell);
-        println!("Original: {}x{}", orig_w, orig_h);
-        println!("Scale: X={:.4}, Y={:.4}", scale_factor_x, scale_factor_y);
-        println!("{}", "=".repeat(70));
-
         for i in 0..score_data.len() {
             let score = score_data[i];
 
@@ -185,18 +180,12 @@ impl SCRFDDetector {
                 continue;
             }
 
-            // ✓ 올바른 그리드 좌표 계산
+            // 그리드 좌표 계산
             let grid_cell_idx = i / num_anchors_per_cell;
             let anchor_in_cell = i % num_anchors_per_cell;
 
             let grid_y = (grid_cell_idx / feat_w as usize) as i32;
             let grid_x = (grid_cell_idx % feat_w as usize) as i32;
-
-            // 앵커 중심 계산
-            let anchor_cx = (grid_x as f32 + 0.5) * stride as f32;
-            let anchor_cy = (grid_y as f32 + 0.5) * stride as f32;
-            let anchor_w = (stride * 2) as f32;
-            let anchor_h = (stride * 2) as f32;
 
             // 바운딩 박스 회귀값
             let bbox_start = i * 4;
@@ -246,7 +235,7 @@ impl SCRFDDetector {
             });
         }
 
-        println!("Stride {} detections: {}\n", stride, detections.len());
+        // println!("Stride {} detections: {}\n", stride, detections.len());
         Ok(detections)
     }
 

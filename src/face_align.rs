@@ -1,8 +1,6 @@
 //! ArcFace Face Alignment Module
 //!
 //! Original sources: https://github.com/deepinsight/insightface/blob/master/python-package/insightface/utils/face_align.py
-//! Ported by: metanonia
-//! Porting date: 2025-11-04
 //!
 //! This module provides face alignment functionality based on the ArcFace standard.
 //! It includes:

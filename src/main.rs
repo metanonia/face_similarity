@@ -35,6 +35,7 @@ fn main() -> Result<()>{
     let image_filename = get_filename_without_extension(image_path);
 
     let blaze_input_size = 128;
+    let scrfd_input_size = 320;
 
     // 이미지 읽기
     let mut src = imgcodecs::imread(
@@ -58,7 +59,7 @@ fn main() -> Result<()>{
     println!("채널 수: {}", channels);
 
     let mut face_detector = BlazeFaceModel::new("models/blaze.onnx", 0.5, 0.3, 2).unwrap();
-    let mut landmark_detector = SCRFDDetector::new("models/det_500m.onnx", 0.5, 0.25).unwrap();
+    let mut landmark_detector = SCRFDDetector::new("models/det_500m.onnx", 0.5, 0.25, scrfd_input_size).unwrap();
     let mut embedding_model =ArcFaceModel::new("models/w600k_mbf.onnx").unwrap();
 
     let mut resized = Mat::default();
