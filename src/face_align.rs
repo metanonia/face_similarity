@@ -1,8 +1,14 @@
-//! ArcFace 얼굴 정렬 모듈
+//! ArcFace Face Alignment Module
 //!
-//! 원본 출처: https://github.com/deepinsight/insightface/blob/master/python-package/insightface/utils/face_align.py
-//! 포팅자: metanonia
-//! 포팅 날짜: 2025-11-04
+//! Original sources: https://github.com/deepinsight/insightface/blob/master/python-package/insightface/utils/face_align.py
+//! Ported by: metanonia
+//! Porting date: 2025-11-04
+//!
+//! This module provides face alignment functionality based on the ArcFace standard.
+//! It includes:
+//! - Face alignment using 5-point landmarks (norm_crop)
+//! - Affine transformation matrix calculation (estimate_norm)
+//! - Point transformation (trans_points_2d, trans_points_3d)
 use opencv::{
     core::{self, Mat, Point2f, MatTrait},
     imgproc,
@@ -25,6 +31,13 @@ pub struct FaceAlign;
 
 impl FaceAlign {
     /// ArcFace 기준 affine 변환 행렬 계산
+    //
+    /// # Arguments
+    /// * `lmk` - 5개 얼굴 랜드마크 (Point2f 배열)
+    /// * `image_size` - 출력 이미지 크기 (112 또는 128)
+    ///
+    /// # Returns
+    /// * `Mat` - 2x3 Affine 변환 행렬
     pub fn estimate_norm(lmk: &[Point2f], image_size: i32) -> Result<Mat> {
         assert_eq!(lmk.len(), 5, "landmarks must have 5 points");
         assert!(image_size % 112 == 0 || image_size % 128 == 0);
@@ -135,6 +148,7 @@ impl FaceAlign {
 
         Ok(new_pts)
     }
+
     /// 3D 포인트 변환 (x, y 변환, z는 스케일만 조정)
     pub fn trans_points_3d(pts: &[(f32, f32, f32)], M: &Mat) -> Result<Vec<(f32, f32, f32)>> {
         let mut new_pts = Vec::new();
@@ -193,35 +207,5 @@ impl FaceAlign {
         }
 
         Ok(mat)
-    }
-}
-
-// 사용 예시
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use opencv::imgcodecs;
-
-    #[test]
-    fn test_face_align() -> Result<()> {
-        let img = imgcodecs::imread("../images/face.png", imgcodecs::IMREAD_COLOR)?;
-        let landmarks = vec![
-            Point2f::new(100.0, 120.0),
-            Point2f::new(200.0, 120.0),
-            Point2f::new(150.0, 160.0),
-            Point2f::new(120.0, 200.0),
-            Point2f::new(180.0, 200.0),
-        ];
-
-        // 정렬된 이미지만 받기
-        let aligned = FaceAlign::norm_crop(&img, &landmarks, 112)?;
-
-        // 정렬된 이미지 + 변환 행렬 받기
-        let (aligned2, M) = FaceAlign::norm_crop2(&img, &landmarks, 112)?;
-
-        // 포인트 변환
-        let transformed = FaceAlign::trans_points_2d(&landmarks, &M)?;
-
-        Ok(())
     }
 }
