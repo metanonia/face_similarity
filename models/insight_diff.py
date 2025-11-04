@@ -2,15 +2,16 @@ from insightface.app import FaceAnalysis
 import cv2
 import numpy as np
 import onnxruntime as ort
+from insightface.utils import face_align
+from pathlib import Path
 
-# 얼굴 정렬 함수 (5점 랜드마크 기준)
 # ArcFace 임베딩 모델 ONNX 경로
 arcface_model_path = "w600k_mbf.onnx"
 ort_session = ort.InferenceSession(arcface_model_path)
 
 def preprocess_aligned_face_already_112(img):
     """
-    이미 112x112로 정렬된 얼굴에 대해 전처리 수행 (RGB 변환, 정규화, 차원 변환)
+    이미 112x112로 정렬된 얼굴에 대해 전처리 수행
     """
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img_norm = img_rgb.astype(np.float32) / 255.0
@@ -24,71 +25,210 @@ def get_embedding_from_aligned_image(img_path, ort_session):
         raise ValueError(f"이미지를 읽을 수 없습니다: {img_path}")
 
     input_tensor = preprocess_aligned_face_already_112(img)
-
     input_name = ort_session.get_inputs()[0].name
     outputs = ort_session.run(None, {input_name: input_tensor})
     embedding = outputs[0][0]
     return embedding
 
+def get_embedding_from_aligned_img(img, ort_session):
+    input_tensor = preprocess_aligned_face_already_112(img)
+    input_name = ort_session.get_inputs()[0].name
+    outputs = ort_session.run(None, {input_name: input_tensor})
+    embedding = outputs[0][0]
+    return embedding
+
+# 코사인 유사도 함수
+def cosine_similarity(vec1, vec2):
+    vec1 = vec1.reshape(-1)
+    vec2 = vec2.reshape(-1)
+    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+
 # InsightFace 준비
+print("=" * 80)
+print("얼굴 임베딩 유사도 비교 (ONNX vs InsightFace)")
+print("=" * 80)
+
 app = FaceAnalysis()
-app.prepare(ctx_id=0, det_size=(320,320))
+app.prepare(ctx_id=0, det_size=(320, 320))
 
-# 원본 이미지와 탐지
-img_orig = cv2.imread("../images/cropped_face.jpg")
-faces_orig = app.get(img_orig)
-img_orig2 = cv2.imread("../images/cropped_face2.png")
-faces_orig2 = app.get(img_orig2)
-img_orig3 = cv2.imread("../images/cropped_face3.png")
-faces_orig3 = app.get(img_orig3)
+# ============================================================================
+# 1. ONNX 모델을 사용한 임베딩 계산 (직접 저장된 정렬 이미지 사용)
+# ============================================================================
+print("\n" + "=" * 80)
+print("1. ONNX 모델을 사용한 임베딩 계산")
+print("=" * 80)
 
-emb_1 = faces_orig[0].embedding
-emb_2 = faces_orig2[0].embedding
-emb_3 = faces_orig3[0].embedding
+aligned_image_paths = [
+    "../images/aligned_face01_0_0.png",
+    "../images/aligned_face02_0_0.png",
+    "../images/aligned_face03_0_0.png",
+    "../images/aligned_face04_0_0.png",
+    "../images/aligned_face05_0_0.png",
+]
 
+onnx_embeddings = {}
+print("\n✅ ONNX 임베딩 추출 중...")
 
-if len(faces_orig) == 0:
-    print("원본 이미지에서 얼굴을 찾지 못했습니다.")
-else:
-    face_orig = faces_orig[0]
+for img_path in aligned_image_paths:
+    try:
+        embedding = get_embedding_from_aligned_image(img_path, ort_session)
+        face_name = Path(img_path).stem  # 파일명 추출
+        onnx_embeddings[face_name] = embedding
+        print(f"   {face_name}: 완료")
+    except Exception as e:
+        print(f"   ❌ {img_path}: {e}")
 
+# ============================================================================
+# 2. InsightFace 라이브러리를 사용한 임베딩 계산 (원본 이미지 사용)
+# ============================================================================
+print("\n" + "=" * 80)
+print("2. InsightFace 라이브러리를 사용한 임베딩 계산")
+print("=" * 80)
 
+insightface_embeddings = {}
+print("\n✅ InsightFace 임베딩 추출 중...")
 
-    # 정렬 이미지 탐지
-    embedding_aligned = get_embedding_from_aligned_image("../images/aligned_face1.png", ort_session)
-    embedding_aligned2 = get_embedding_from_aligned_image("../images/aligned_face2.png", ort_session)
-    embedding_aligned3 = get_embedding_from_aligned_image("../images/aligned_face3.png", ort_session)
+for i in range(1, 7):  # face01.jpg ~ face06.jpg
+    img_path = f"../images/face{i:02d}.jpg"
 
-    # 코사인 유사도 함수
-    def cosine_similarity(vec1, vec2):
-        vec1 = vec1.reshape(-1)
-        vec2 = vec2.reshape(-1)
-        return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    try:
+        img = cv2.imread(img_path)
+        if img is None:
+            print(f"   ⚠️ {img_path}: 파일을 찾을 수 없습니다.")
+            continue
 
-    # 임베딩 간 유사도 계산
-    org_1_2 = cosine_similarity(emb_1, emb_2)
-    org_1_3 = cosine_similarity(emb_1, emb_3)
-    org_2_3 = cosine_similarity(emb_2, emb_3)
+        # InsightFace로 얼굴 감지 및 임베딩
+        faces = app.get(img)
 
-    print(f"Similarity between aligned_from_orig and aligned_from_orig2: {org_1_2:.6f}")
-    print(f"Similarity between aligned_from_orig and aligned_from_orig3: {org_1_3:.6f}")
-    print(f"Similarity between aligned_from_orig2 and aligned_from_orig3: {org_2_3:.6f}")
+        if len(faces) > 0:
+            # 첫 번째 얼굴의 임베딩 사용
+            embedding = faces[0].embedding
+            face_name = f"face{i:02d}"
+            insightface_embeddings[face_name] = embedding
+            print(f"   ✅ {face_name}: 완료 (감지된 얼굴: {len(faces)}개)")
+        else:
+            print(f"   ⚠️ {img_path}: 얼굴이 감지되지 않았습니다.")
 
+    except Exception as e:
+        print(f"   ❌ {img_path}: {e}")
 
-    # 임베딩 간 유사도 계산
-    my_1_2 = cosine_similarity(embedding_aligned, embedding_aligned2)
-    my_1_3 = cosine_similarity(embedding_aligned, embedding_aligned3)
-    my_2_3 = cosine_similarity(embedding_aligned2, embedding_aligned3)
+# ============================================================================
+# 3. 유사도 행렬 계산 (ONNX)
+# ============================================================================
+print("\n" + "=" * 80)
+print("3. ONNX 모델 유사도 분석")
+print("=" * 80)
 
-    print(f"Similarity between aligned_from_my1 and aligned_from_my2: {my_1_2:.6f}")
-    print(f"Similarity between aligned_from_my1 and aligned_from_my3: {my_1_3:.6f}")
-    print(f"Similarity between aligned_from_my2 and aligned_from_my3: {my_2_3:.6f}")
+if len(onnx_embeddings) > 1:
+    faces_onnx = list(onnx_embeddings.keys())
+    similarity_matrix_onnx = np.zeros((len(faces_onnx), len(faces_onnx)))
 
-    # 임베딩 간 유사도 계산
-    sim_1_2 = cosine_similarity(emb_1, embedding_aligned)
-    sim_1_3 = cosine_similarity(emb_2, embedding_aligned2)
-    sim_2_3 = cosine_similarity(emb_3, embedding_aligned3)
+    print("\n✅ ONNX 코사인 유사도:")
+    for i, face1 in enumerate(faces_onnx):
+        for j, face2 in enumerate(faces_onnx):
+            if i <= j:
+                sim = cosine_similarity(onnx_embeddings[face1], onnx_embeddings[face2])
+                similarity_matrix_onnx[i][j] = sim
+                similarity_matrix_onnx[j][i] = sim
 
-    print(f"Similarity between aligned_from_orig and aligned_from_my1: {sim_1_2:.6f}")
-    print(f"Similarity between aligned_from_orig2 and aligned_from_my2: {sim_1_3:.6f}")
-    print(f"Similarity between aligned_from_orig3 and aligned_from_my3: {sim_2_3:.6f}")
+                if i != j:
+                    print(f"   {face1} vs {face2}: {sim:.6f}")
+                else:
+                    print(f"   {face1} vs {face2}: {sim:.6f} (자기자신)")
+
+    # ONNX 유사도 행렬
+    print("\n✅ ONNX 유사도 행렬:")
+    print("      ", end="")
+    for face in faces_onnx:
+        print(f"{face:15}", end="")
+    print()
+
+    for i, face1 in enumerate(faces_onnx):
+        print(f"{face1}", end=" ")
+        for j in range(len(faces_onnx)):
+            print(f"{similarity_matrix_onnx[i][j]:15.6f}", end="")
+        print()
+
+# ============================================================================
+# 4. 유사도 행렬 계산 (InsightFace)
+# ============================================================================
+print("\n" + "=" * 80)
+print("4. InsightFace 라이브러리 유사도 분석")
+print("=" * 80)
+
+if len(insightface_embeddings) > 1:
+    faces_insightface = sorted(list(insightface_embeddings.keys()))
+    similarity_matrix_insightface = np.zeros((len(faces_insightface), len(faces_insightface)))
+
+    print("\n✅ InsightFace 코사인 유사도:")
+    for i, face1 in enumerate(faces_insightface):
+        for j, face2 in enumerate(faces_insightface):
+            if i <= j:
+                sim = cosine_similarity(insightface_embeddings[face1], insightface_embeddings[face2])
+                similarity_matrix_insightface[i][j] = sim
+                similarity_matrix_insightface[j][i] = sim
+
+                if i != j:
+                    print(f"   {face1} vs {face2}: {sim:.6f}")
+                else:
+                    print(f"   {face1} vs {face2}: {sim:.6f} (자기자신)")
+
+    # InsightFace 유사도 행렬
+    print("\n✅ InsightFace 유사도 행렬:")
+    print("      ", end="")
+    for face in faces_insightface:
+        print(f"{face:15}", end="")
+    print()
+
+    for i, face1 in enumerate(faces_insightface):
+        print(f"{face1}", end=" ")
+        for j in range(len(faces_insightface)):
+            print(f"{similarity_matrix_insightface[i][j]:15.6f}", end="")
+        print()
+
+# ============================================================================
+# 5. 비교 분석
+# ============================================================================
+print("\n" + "=" * 80)
+print("5. 최종 분석")
+print("=" * 80)
+
+if len(onnx_embeddings) > 1:
+    print("\n✅ ONNX 분석:")
+    max_sim_onnx = -1
+    max_pair_onnx = None
+    for i in range(len(faces_onnx)):
+        for j in range(i + 1, len(faces_onnx)):
+            if similarity_matrix_onnx[i][j] > max_sim_onnx:
+                max_sim_onnx = similarity_matrix_onnx[i][j]
+                max_pair_onnx = (faces_onnx[i], faces_onnx[j])
+
+    print(f"   가장 유사한 쌍: {max_pair_onnx[0]} vs {max_pair_onnx[1]} ({max_sim_onnx:.6f})")
+
+    avg_sims_onnx = []
+    for i, face in enumerate(faces_onnx):
+        other_sims = [similarity_matrix_onnx[i][j] for j in range(len(faces_onnx)) if i != j]
+        avg_sim = np.mean(other_sims)
+        avg_sims_onnx.append(avg_sim)
+        print(f"   {face} 평균 유사도: {avg_sim:.6f}")
+
+if len(insightface_embeddings) > 1:
+    print("\n✅ InsightFace 분석:")
+    max_sim_if = -1
+    max_pair_if = None
+    for i in range(len(faces_insightface)):
+        for j in range(i + 1, len(faces_insightface)):
+            if similarity_matrix_insightface[i][j] > max_sim_if:
+                max_sim_if = similarity_matrix_insightface[i][j]
+                max_pair_if = (faces_insightface[i], faces_insightface[j])
+
+    print(f"   가장 유사한 쌍: {max_pair_if[0]} vs {max_pair_if[1]} ({max_sim_if:.6f})")
+
+    for i, face in enumerate(faces_insightface):
+        other_sims = [similarity_matrix_insightface[i][j] for j in range(len(faces_insightface)) if i != j]
+        avg_sim = np.mean(other_sims)
+        print(f"   {face} 평균 유사도: {avg_sim:.6f}")
+
+print("\n" + "=" * 80)
+print("완료!")
+print("=" * 80)

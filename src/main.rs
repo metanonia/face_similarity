@@ -1,22 +1,44 @@
+use std::path::Path;
 use opencv::{highgui, imgcodecs, imgproc, Result};
 use opencv::core::{MatTraitConst, Rect, Size, Vector};
 use opencv::prelude::Mat;
 use crate::arcface_model::ArcFaceModel;
 use crate::blaze_model::BlazeFaceModel;
-use crate::scrfd_model::{FaceAligner, SCRFDDetector};
+use crate::face_align::FaceAlign;
+use crate::scrfd_model::{SCRFDDetector};
 
 mod blaze_model;
 mod scrfd_model;
 mod face_embedding_model;
 mod arcface_model;
+mod face_align;
+
+fn get_filename_without_extension(path: &str) -> String {
+    Path::new(path)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("image")
+        .to_string()
+}
 
 fn main() -> Result<()>{
-    let BlazeInputSize = 128;
-    let ScrdfInputSize = 320;
+    let args: Vec<String> = std::env::args().collect();
+
+    // 파라메터 확인
+    if args.len() < 2 {
+        println!("Usage: {} <image_path>", args[0]);
+        println!("Example: {} ./images/face01.jpg", args[0]);
+        return Ok(());
+    }
+
+    let image_path = &args[1];
+    let image_filename = get_filename_without_extension(image_path);
+
+    let blaze_input_size = 128;
 
     // 이미지 읽기
     let mut src = imgcodecs::imread(
-        "./images/face01.jpg",
+        image_path,
         imgcodecs::IMREAD_COLOR
     )?;
 
@@ -40,15 +62,18 @@ fn main() -> Result<()>{
     let mut embedding_model =ArcFaceModel::new("models/w600k_mbf.onnx").unwrap();
 
     let mut resized = Mat::default();
-    imgproc::resize(&src, &mut resized, Size::new(BlazeInputSize, BlazeInputSize), 0.0, 0.0, imgproc::INTER_LINEAR).unwrap();
+    imgproc::resize(&src, &mut resized, Size::new(blaze_input_size, blaze_input_size), 0.0, 0.0, imgproc::INTER_LINEAR).unwrap();
 
     let face_detections = face_detector.detect(&resized).unwrap();
+
+    let mut face_index = 0;
+
     if face_detections.len() > 0 {
         for detection in face_detections {
             let color = opencv::core::Scalar::new(0.0, 255.0, 0.0, 0.0) ;
 
-            let scale_x = orig_width / BlazeInputSize as f32;
-            let scale_y = orig_height / BlazeInputSize as f32;
+            let scale_x = orig_width / blaze_input_size as f32;
+            let scale_y = orig_height / blaze_input_size as f32;
 
             let scaled_bbox = opencv::core::Rect::new(
                 (detection.bbox.x as f32 * scale_x) as i32,
@@ -57,51 +82,6 @@ fn main() -> Result<()>{
                 (detection.bbox.height as f32 * scale_y) as i32,
             );
 
-
-
-            // 랜드마크 찍기
-            // for (i, lm) in detection.landmarks.iter().enumerate() {
-            //     let lm_x = (lm[0] * scale_x) as i32;
-            //     let lm_y = (lm[1] * scale_y) as i32;
-            //
-            //     let color = match i {
-            //         0 | 1 => opencv::core::Scalar::new(0.0, 0.0, 255.0, 0.0),       // 빨강 (눈)
-            //         2     => opencv::core::Scalar::new(255.0, 0.0, 0.0, 0.0),       // 파랑 (코)
-            //         3     => opencv::core::Scalar::new(255.0, 0.0, 255.0, 0.0),     // 마젠타 (입)
-            //         4 | 5 => opencv::core::Scalar::new(0.0, 165.0, 255.0, 0.0),     // 오렌지 (귀)
-            //         _     => opencv::core::Scalar::new(0.0, 255.0, 0.0, 0.0),       // 나머지
-            //     };
-            //
-            //     opencv::imgproc::circle(
-            //         &mut src,
-            //         opencv::core::Point::new(lm_x, lm_y),
-            //         4,            // 크기
-            //         color,
-            //         -1,           // 채움
-            //         opencv::imgproc::LINE_8,
-            //         0,
-            //     ).unwrap();
-            // }
-            //
-            // let text = format!("Score: {:.2}", detection.score);
-            // opencv::imgproc::put_text(
-            //     &mut src,
-            //     &text,
-            //     opencv::core::Point::new(scaled_bbox.x, scaled_bbox.y - 10),
-            //     opencv::imgproc::FONT_HERSHEY_SIMPLEX,
-            //     0.6,
-            //     opencv::core::Scalar::new(0.0, 0.0, 255.0, 0.0),
-            //     2,
-            //     opencv::imgproc::LINE_8,
-            //     false
-            // ).unwrap();
-
-            // 원본 이미지에서 지정된 영역 추출
-            // let mut cropped = Mat::default();
-            // src.roi(scaled_bbox)?.copy_to(&mut cropped)?;
-            // highgui::imshow("Image", &cropped)?;
-            // highgui::wait_key(0)?;
-            // highgui::destroy_all_windows()?;
             // 바운딩 박스 확장 (예: 20% 여유)
             let margin_ratio = 0.2;
             let margin_x = (scaled_bbox.width as f32 * margin_ratio) as i32;
@@ -117,19 +97,26 @@ fn main() -> Result<()>{
             // 확장된 영역으로 크롭
             let mut cropped = Mat::default();
             src.roi(expanded_bbox)?.copy_to(&mut cropped)?;
-            let save_cropped_path = "images/cropped_face1.png";
-            if let Err(e) = imgcodecs::imwrite(save_cropped_path, &cropped, &opencv::core::Vector::new()) {
+            let save_cropped_path = format!("images/cropped_{}_{}.png", image_filename, face_index);
+            if let Err(e) = imgcodecs::imwrite(&save_cropped_path, &cropped, &Vector::new()) {
                 eprintln!("⚠️ 크롭 이미지 저장 실패: {}", e);
             } else {
                 println!("✅ 크롭 이미지 저장 완료: {}", save_cropped_path);
             }
 
-
-
             // 크롭된 이미지를 landmark 모델로 보냄
             let landmark_detects = landmark_detector.detect(&cropped).unwrap();
             println!("detected landmark {}", landmark_detects.len());
+
+            let mut landmark_index = 0;
             for landmark in landmark_detects {
+                let aligned = FaceAlign::norm_crop(&cropped, &landmark.landmarks, 112).unwrap();
+                let save_path = format!("images/aligned_{}_{}_{}.png", image_filename, face_index, landmark_index);
+                if let Err(e) = imgcodecs::imwrite(&save_path, &aligned, &Vector::new()) {
+                    eprintln!("⚠️ 이미지 저장 실패: {}", e);
+                } else {
+                    println!("✅ Norm 얼굴 저장 완료: {}", save_path);
+                }
                 println!("confidence {:?}", landmark.confidence);
                 println!("bbox {:?}", landmark.bbox);
                 println!("landmarks {:?}", landmark.landmarks);
@@ -165,15 +152,10 @@ fn main() -> Result<()>{
 
                 // landmark를 이용하여 이미지 정렬
                 let safe_bbox = Rect::new(0, 0, 112, 112);
-                let aligned = FaceAligner::align_face(&cropped, &landmark.landmarks, 112).unwrap();
-                let save_path = "images/aligned_face1.png";
-                if let Err(e) = imgcodecs::imwrite(save_path, &aligned, &opencv::core::Vector::new()) {
-                    eprintln!("⚠️ 이미지 저장 실패: {}", e);
-                } else {
-                    println!("✅ Aligned 얼굴 저장 완료: {}", save_path);
-                }
                 let embedded = embedding_model.embbeding(&aligned,safe_bbox).unwrap();
                 // println!("{:?}", embedded);
+
+                landmark_index += 1;
             }
 
             // 박스 그리기
@@ -188,14 +170,17 @@ fn main() -> Result<()>{
 
 
             println!("Scaled box{:?}", scaled_bbox);
+
+            face_index += 1;
         }
+    } else {
+        println!("얼굴이 감지되지 않았습니다.");
     }
 
     // 이미지 표시 (선택사항)
-    opencv::highgui::imshow("Landmark Visualization", &src)?;
-    opencv::highgui::wait_key(0)?;
-    opencv::highgui::destroy_all_windows()?;
-
+    // highgui::imshow("Landmark Visualization", &src)?;
+    // highgui::wait_key(0)?;
+    // highgui::destroy_all_windows()?;
 
     Ok(())
 }

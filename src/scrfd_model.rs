@@ -5,8 +5,9 @@ use opencv::{
 
 use ndarray::Array4;
 use std::error::Error;
-use opencv::calib3d::{estimate_affine_partial_2d, RANSAC};
-use opencv::core::{no_array, AlgorithmHint, MatTraitConstManual, Rect2f, Scalar};
+use opencv::calib3d::{estimate_affine_partial_2d, LMEDS, RANSAC};
+use opencv::core::{no_array, AlgorithmHint, MatExprTraitConst, MatTrait, MatTraitConstManual, MatTraitManual, Rect2f, Scalar, Vector, BORDER_CONSTANT};
+use opencv::imgproc::INTER_LINEAR;
 use opencv::prelude::MatTraitConst;
 use ort::inputs;
 use ort::session::builder::GraphOptimizationLevel;
@@ -290,88 +291,5 @@ impl SCRFDDetector {
         }
 
         inter_area / (box1_area + box2_area - inter_area)
-    }
-}
-
-pub struct FaceAligner;
-
-impl FaceAligner {
-    pub fn align_face(
-        img: &Mat,
-        landmarks: &[Point2f],
-        output_size: i32,
-    ) -> opencv::Result<Mat> {
-        if landmarks.len() != 5 {
-            return Err(opencv::Error::new(core::StsBadArg, "랜드마크 5개 필요"));
-        }
-
-        // ArcFace 5점 템플릿 (112x112 기준)
-        let scale_factor = 1.0; // 얼굴을 더 크게
-        let arcface_template = vec![
-            Point2f::new(38.2946 * scale_factor, 51.6963 * scale_factor),
-            Point2f::new(73.5318 * scale_factor, 51.5014 * scale_factor),
-            Point2f::new(56.0252 * scale_factor, 71.7366 * scale_factor),
-            Point2f::new(41.5493 * scale_factor, 92.3655 * scale_factor),
-            Point2f::new(70.7299 * scale_factor, 92.2041 * scale_factor),
-        ];
-
-        let scale_ratio = output_size as f32 / 112.0;
-        let dst_pts: Vec<Point2f> = arcface_template
-            .iter()
-            .map(|p| Point2f::new(p.x * scale_ratio, p.y * scale_ratio))
-            .collect();
-
-        // 1. 원본 랜드마크 (landmarks)를 $5 \times 2$ Mat으로 변환
-
-        // x, y 좌표를 순서대로 Vec<f32>로 평탄화합니다.
-        let mut src_flat: Vec<f32> = Vec::with_capacity(landmarks.len() * 2);
-        for p in landmarks {
-            src_flat.push(p.x);
-            src_flat.push(p.y);
-        }
-
-        // Mat::from_slice를 사용하여 1차원 Mat을 생성한 후, reshape로 5행 2열로 만듭니다.
-        // 1(채널): Mat은 CV_32F 타입이므로 단일 채널을 사용하고 2열을 유지합니다.
-        let src_mat_1d = Mat::from_slice(&src_flat)?;
-        let src_mat = src_mat_1d.reshape(1, 5)?; // 1채널, 5행으로 재구성 (결과: 5행 2열)
-
-        // 2. 대상 랜드마크 (dst_pts)를 $5 \times 2$ Mat으로 변환
-
-        // x, y 좌표를 순서대로 Vec<f32>로 평탄화합니다.
-        let mut dst_flat: Vec<f32> = Vec::with_capacity(dst_pts.len() * 2);
-        for p in &dst_pts {
-            dst_flat.push(p.x);
-            dst_flat.push(p.y);
-        }
-
-        // Mat::from_slice로 1차원 Mat 생성 후, reshape로 5행 2열로 만듭니다.
-        let dst_mat_1d = Mat::from_slice(&dst_flat)?;
-        let dst_mat = dst_mat_1d.reshape(1, 5)?; // 1채널, 5행으로 재구성 (결과: 5행 2열)
-
-        // 3. 아핀 변환 행렬 추정
-        let transform = estimate_affine_partial_2d(
-            &src_mat,
-            &dst_mat,
-            &mut no_array(),
-            RANSAC,
-            5.0,
-            200,
-            0.99,
-            10
-        )?;
-
-        // 4. 이미지 변환
-        let mut aligned = Mat::default();
-        imgproc::warp_affine(
-            img,
-            &mut aligned,
-            &transform,
-            Size::new(output_size, output_size),
-            imgproc::INTER_LINEAR,
-            core::BORDER_CONSTANT,
-            Scalar::all(0.0),
-        )?;
-
-        Ok(aligned)
     }
 }
