@@ -2,16 +2,10 @@ use std::path::Path;
 use opencv::{highgui, imgcodecs, imgproc, Result};
 use opencv::core::{MatTraitConst, Rect, Size, Vector};
 use opencv::prelude::Mat;
-use crate::arcface_model::ArcFaceModel;
-use crate::blaze_model::BlazeFaceModel;
-use crate::face_align::FaceAlign;
-use crate::scrfd_model::{SCRFDDetector};
-
-mod blaze_model;
-mod scrfd_model;
-mod face_embedding_model;
-mod arcface_model;
-mod face_align;
+use face_similarity::arcface_model::ArcFaceModel;
+use face_similarity::blaze_model::BlazeFaceModel;
+use face_similarity::face_align::FaceAlign;
+use face_similarity::scrfd_model::{SCRFDDetector};
 
 fn get_filename_without_extension(path: &str) -> String {
     Path::new(path)

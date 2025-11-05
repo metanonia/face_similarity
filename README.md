@@ -41,3 +41,10 @@
     * Outputs:<br>
       516: [1, 512]
 
+###[ TEST DATA]
+* lfw: https://www.kaggle.com/datasets/jessicali9530/lfw-dataset?resource=download
+  * lfw 폴더 생성하여 해당 자료 추가
+  * cargo run --bin lfw
+* celeba-hq: https://www.kaggle.com/datasets/lamsimon/celebahq
+  * celeba 폴더 생성하여 해당 자료 추가
+  * cargo run --bin celeba
