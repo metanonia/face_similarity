@@ -1,5 +1,6 @@
 /target
 **/**onnx
+**/**tflite
 .idea
 /images
 /lfw
