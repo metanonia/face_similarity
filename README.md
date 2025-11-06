@@ -49,3 +49,4 @@
   * celeba 폴더 생성하여 해당 자료 추가
   * cargo run --bin make_celeba_pair   positive_pairs.txt(동일인) negative_pairs.txt(다른사람) 생성
   * cargo run --bin celeba <테스트샘풀수> <true/false: 얼굴정렬사용여부>
+* voxceleb2 https://huggingface.co/datasets/ProgramComputer/voxceleb/tree/main/vox2
