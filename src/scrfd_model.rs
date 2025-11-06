@@ -163,7 +163,6 @@ impl SCRFDDetector {
         let feat_h = input_size / stride;
         let num_grid_cells = (feat_w * feat_h) as usize;
 
-        // ✓ 각 격자 위치마다 몇 개의 앵커인지 계산
         let num_anchors_per_cell = if score_data.len() > num_grid_cells {
             score_data.len() / num_grid_cells
         } else {
@@ -175,19 +174,16 @@ impl SCRFDDetector {
 
         for i in 0..score_data.len() {
             let score = score_data[i];
-
             if score < conf_threshold {
                 continue;
             }
 
-            // 그리드 좌표 계산
             let grid_cell_idx = i / num_anchors_per_cell;
             let anchor_in_cell = i % num_anchors_per_cell;
 
             let grid_y = (grid_cell_idx / feat_w as usize) as i32;
             let grid_x = (grid_cell_idx % feat_w as usize) as i32;
 
-            // 바운딩 박스 회귀값
             let bbox_start = i * 4;
             if bbox_start + 4 > bbox_data.len() {
                 continue;
@@ -198,11 +194,9 @@ impl SCRFDDetector {
             let d_right = bbox_data[bbox_start + 2];
             let d_bottom = bbox_data[bbox_start + 3];
 
-            // grid_x, grid_y는 feature map 상의 셀 좌표
             let cx = grid_x as f32 * stride as f32;
             let cy = grid_y as f32 * stride as f32;
 
-            // SCRFD는 bbox가 stride 단위 좌표로 이미 예측됨
             let x1 = (cx - d_left * stride as f32) * scale_factor_x;
             let y1 = (cy - d_top * stride as f32) * scale_factor_y;
             let x2 = (cx + d_right * stride as f32) * scale_factor_x;
@@ -215,18 +209,24 @@ impl SCRFDDetector {
                 continue;
             }
 
-            // Landmark 처리
+            // ✓ 랜드마크 범위 검사 추가
             let mut lms = Vec::new();
             let landmark_start = i * 10;
 
-            if landmark_start + 10 <= landmark_data.len() {
-                for j in 0..5 {
-                    let lm_x = (cx + landmark_data[landmark_start + j * 2] * stride as f32) * scale_factor_x;
-                    let lm_y = (cy + landmark_data[landmark_start + j * 2 + 1] * stride as f32) * scale_factor_y;
-                    lms.push(Point2f::new(lm_x, lm_y));
+            if landmark_data.len() == score_data.len() * 10 {
+                // 형태 1: [N, 10] (각 detection마다 10개 값)
+                let landmark_start = i * 10;
+                if landmark_start + 10 <= landmark_data.len() {
+                    for j in 0..5 {
+                        let lm_x = (cx + landmark_data[landmark_start + j * 2] * stride as f32) * scale_factor_x;
+                        let lm_y = (cy + landmark_data[landmark_start + j * 2 + 1] * stride as f32) * scale_factor_y;
+                        lms.push(Point2f::new(lm_x, lm_y));
+                    }
                 }
+            } else {
+                eprintln!("Unexpected landmark shape: scores={}, landmarks={}",
+                          score_data.len(), landmark_data.len());
             }
-
 
             detections.push(FaceDetection {
                 bbox: Rect2f::new(x1, y1, w, h),
@@ -235,7 +235,6 @@ impl SCRFDDetector {
             });
         }
 
-        // println!("Stride {} detections: {}\n", stride, detections.len());
         Ok(detections)
     }
 
