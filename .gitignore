@@ -4,3 +4,7 @@
 .idea
 /images
 /lfw
+/CelebA
+**/**txt
+**/**csv
+**/**tflite
