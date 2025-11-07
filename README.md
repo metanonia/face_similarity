@@ -49,7 +49,7 @@
   * celeba 폴더 생성하여 해당 자료 추가
   * cargo run --bin make_celeba_pair   positive_pairs.txt(동일인) negative_pairs.txt(다른사람) 생성
   * cargo run --bin celeba <테스트샘풀수> <true/false: 얼굴정렬사용여부>
- * detector: scrfd/retinaface 비교
+* detector: scrfd/retinaface 비교
   * cargo run --bin detector scrfd/retinaface  320/640
 * voxceleb2 https://huggingface.co/datasets/ProgramComputer/voxceleb/tree/main/vox2
   * mp4 자료만 다운로드
