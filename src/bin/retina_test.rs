@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "models/retinaface-resnet50.onnx",  // 모델 경로 변경
         0.5,   // confidence threshold
         0.4,   // nms threshold
+        640,
     )?;
 
     // 얼굴 검출

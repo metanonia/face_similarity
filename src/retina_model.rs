@@ -30,7 +30,7 @@ pub struct RetinaFace {
 }
 
 impl RetinaFace {
-    pub fn new(model_path: &str, conf_threshold: f32, _nms_threshold: f32) -> Result<Self, Box<dyn Error>> {
+    pub fn new(model_path: &str, conf_threshold: f32, _nms_threshold: f32, input_val: i32) -> Result<Self, Box<dyn Error>> {
         if !std::path::Path::new(model_path).exists() {
             return Err(format!("모델 파일을 찾을 수 없습니다: {}", model_path).into());
         }
@@ -39,7 +39,7 @@ impl RetinaFace {
         let net = dnn::read_net_from_onnx(model_path)?;
         println!("RetinaFace 모델 로드 완료!");
 
-        let input_size = (640, 640);
+        let input_size = (input_val, input_val);
         let priors = Self::generate_priors(input_size.0);
         let variance = vec![0.1, 0.2];
 

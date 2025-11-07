@@ -3,13 +3,38 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
 use std::collections::HashMap;
 use opencv::{imgcodecs, imgproc, Result};
-use opencv::core::{Mat, Size, Vector};
+use opencv::core::{Mat, Size, Vector, Point2f};
 use opencv::prelude::MatTraitConst;
 
 use face_similarity::blaze_model::BlazeFaceModel;
 use face_similarity::scrfd_model::SCRFDDetector;
 use face_similarity::arcface_model::ArcFaceModel;
 use face_similarity::face_align::FaceAlign;
+use face_similarity::retina_model::RetinaFace;
+
+/// 검출기 타입 열거형
+#[derive(Debug, Clone, Copy)]
+enum DetectorType {
+    SCRFD,
+    RetinaFace,
+}
+
+impl DetectorType {
+    fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "scrfd" => Some(DetectorType::SCRFD),
+            "retinaface" | "retina" => Some(DetectorType::RetinaFace),
+            _ => None,
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            DetectorType::SCRFD => "SCRFD",
+            DetectorType::RetinaFace => "RetinaFace",
+        }
+    }
+}
 
 /// 코사인 유사도 계산
 fn cosine_similarity(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
@@ -33,14 +58,13 @@ fn cosine_similarity(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     }
 }
 
-/// 이미지에서 임베딩 추출
-fn extract_embedding(
+/// SCRFD를 사용한 임베딩 추출
+fn extract_embedding_scrfd(
     image_path: &str,
     blaze: &mut BlazeFaceModel,
     scrfd: &mut SCRFDDetector,
     arcface: &mut ArcFaceModel,
 ) -> Option<Vec<f32>> {
-    // 이미지 읽기
     let src = imgcodecs::imread(image_path, imgcodecs::IMREAD_COLOR).ok()?;
     if src.empty() {
         return None;
@@ -49,17 +73,15 @@ fn extract_embedding(
     let orig_height = src.rows() as f32;
     let orig_width = src.cols() as f32;
 
-    // Blaze 감지 (얼굴 대략적 위치)
+    // Blaze 감지
     let mut resized = Mat::default();
     imgproc::resize(&src, &mut resized, Size::new(128, 128), 0.0, 0.0, imgproc::INTER_LINEAR).ok()?;
 
     let face_detections = blaze.detect(&resized).ok()?;
     if face_detections.is_empty() {
-        eprintln!("No face_detections found");
         return None;
     }
 
-    // 첫 번째 얼굴만 처리
     let detection = &face_detections[0];
     let scale_x = orig_width / 128.0;
     let scale_y = orig_height / 128.0;
@@ -71,26 +93,19 @@ fn extract_embedding(
         (detection.bbox.height as f32 * scale_y) as i32,
     );
 
-    // 바운딩 박스 확장
     let margin_ratio = 0.2;
     let margin_x = (scaled_bbox.width as f32 * margin_ratio) as i32;
     let margin_y = (scaled_bbox.height as f32 * margin_ratio) as i32;
 
-    // 우선 여유를 포함한 확장된 크기 계산
     let new_width = scaled_bbox.width + 2 * margin_x;
     let new_height = scaled_bbox.height + 2 * margin_y;
-
-    // width, height 중 큰 값을 사용해 정사각형으로 만들기
     let max_side = new_width.max(new_height);
 
-    // 정사각형이 중심을 유지하도록 x, y 조정
     let center_x = scaled_bbox.x + scaled_bbox.width / 2;
     let center_y = scaled_bbox.y + scaled_bbox.height / 2;
 
     let new_x = (center_x - max_side / 2).max(0);
     let new_y = (center_y - max_side / 2).max(0);
-
-    // 이미지 범위를 벗어나지 않게 조정
     let new_x = new_x.min(orig_width as i32 - max_side);
     let new_y = new_y.min(orig_height as i32 - max_side);
 
@@ -101,22 +116,58 @@ fn extract_embedding(
         max_side.min(orig_height as i32 - new_y),
     );
 
-    // 크롭
     let mut cropped = Mat::default();
     src.roi(expanded_bbox).ok()?.copy_to(&mut cropped).ok()?;
 
     // SCRFD 랜드마크 감지
-    let landmark_detects = scrfd.detect(&cropped).ok()?;
-    // println!("  🎯 SCRFD 감지: {}개", landmark_detects.len());
+    let landmark_detects = scrfd.detect(&src).ok()?;
     if landmark_detects.is_empty() {
-        eprintln!("No landmarks found");
         return None;
     }
 
     let landmark = &landmark_detects[0];
 
     // 정렬 및 임베딩 추출
-    let aligned = FaceAlign::norm_crop(&cropped, &landmark.landmarks, 112).ok()?;
+    let aligned = FaceAlign::norm_crop(&src, &landmark.landmarks, 112).ok()?;
+    let safe_bbox = opencv::core::Rect::new(0, 0, 112, 112);
+    let embedding = arcface.embbeding(&aligned, safe_bbox).ok()?;
+    Some(embedding)
+}
+
+/// RetinaFace를 사용한 임베딩 추출
+fn extract_embedding_retina(
+    image_path: &str,
+    blaze: &mut BlazeFaceModel,
+    retina: &mut RetinaFace,
+    arcface: &mut ArcFaceModel,
+) -> Option<Vec<f32>> {
+    let src = imgcodecs::imread(image_path, imgcodecs::IMREAD_COLOR).ok()?;
+    if src.empty() {
+        return None;
+    }
+
+    let orig_height = src.rows() as f32;
+    let orig_width = src.cols() as f32;
+
+    // Blaze 감지
+    let mut resized = Mat::default();
+    imgproc::resize(&src, &mut resized, Size::new(128, 128), 0.0, 0.0, imgproc::INTER_LINEAR).ok()?;
+
+    let face_detections = blaze.detect(&resized).ok()?;
+    if face_detections.is_empty() {
+        return None;
+    }
+
+    // RetinaFace 랜드마크 감지
+    let landmark_detects = retina.detect(&src).ok()?;
+    if landmark_detects.is_empty() {
+        return None;
+    }
+
+    let landmark = &landmark_detects[0];
+
+    // 정렬 및 임베딩 추출
+    let aligned = FaceAlign::norm_crop(&src, &landmark.landmarks, 112).ok()?;
     let safe_bbox = opencv::core::Rect::new(0, 0, 112, 112);
     let embedding = arcface.embbeding(&aligned, safe_bbox).ok()?;
     Some(embedding)
@@ -130,18 +181,16 @@ fn find_image_file_with_padding(dir_path: &str, image_id: &str, person_name: &st
         return None;
     }
 
-    // 숫자를 4자리로 패딩
     if let Ok(id_num) = id_trimmed.parse::<u32>() {
         let padded_id = format!("{:04}", id_num);
 
-        // 시도할 파일명들
         let filenames = vec![
-            format!("{}_{}.jpg", person_name, padded_id),     // Ahmed_Chalabi_0002.jpg
-            format!("{}_{}.JPG", person_name, padded_id),     // Ahmed_Chalabi_0002.JPG
-            format!("{}.jpg", padded_id),                     // 0002.jpg
-            format!("{}.JPG", padded_id),                     // 0002.JPG
-            format!("{}.jpg", id_trimmed),                    // 2.jpg
-            format!("{}.JPG", id_trimmed),                    // 2.JPG
+            format!("{}_{}.jpg", person_name, padded_id),
+            format!("{}_{}.JPG", person_name, padded_id),
+            format!("{}.jpg", padded_id),
+            format!("{}.JPG", padded_id),
+            format!("{}.jpg", id_trimmed),
+            format!("{}.JPG", id_trimmed),
         ];
 
         for filename in filenames {
@@ -172,7 +221,6 @@ fn parse_pairs_correct(csv_file: &str) -> Vec<(String, String, bool)> {
             if let Ok(line) = line {
                 let parts: Vec<&str> = line.trim().split(',').collect();
                 if parts.len() == 3 || (parts.len() == 4 && parts[3] == "") {
-                    // 동일인 쌍: person, id1, id2
                     let person = parts[0].trim().to_string();
                     let id1 = parts[1].trim().to_string();
                     let id2 = parts[2].trim().to_string();
@@ -191,11 +239,9 @@ fn parse_pairs_correct(csv_file: &str) -> Vec<(String, String, bool)> {
                             failed_count += 1;
                         }
                     } else {
-                        eprintln!("fail {}", dir_path);
                         failed_count += 1;
                     }
                 } else if parts.len() == 4 {
-                    // 다인 쌍: person1, id1, person2, id2
                     let person1 = parts[0].trim().to_string();
                     let id1 = parts[1].trim().to_string();
                     let person2 = parts[2].trim().to_string();
@@ -208,7 +254,6 @@ fn parse_pairs_correct(csv_file: &str) -> Vec<(String, String, bool)> {
                         find_image_file_with_padding(&dir_path1, &id1, &person1),
                         find_image_file_with_padding(&dir_path2, &id2, &person2),
                     ) {
-                        // 실제 파일 존재 여부 확인
                         if Path::new(&path1).exists() && Path::new(&path2).exists() {
                             pairs.push((path1, path2, false));
                             success_count += 1;
@@ -223,7 +268,8 @@ fn parse_pairs_correct(csv_file: &str) -> Vec<(String, String, bool)> {
             }
         }
 
-        println!("✅ 로드 결과: 성공={}, 실패={} Positive={} Negative={}", success_count, failed_count, positive_pair, negative_pair);
+        println!("✅ 로드 결과: 성공={}, 실패={} Positive={} Negative={}",
+                 success_count, failed_count, positive_pair, negative_pair);
     }
 
     pairs
@@ -235,10 +281,10 @@ fn evaluate_pairs(
     embeddings: &HashMap<String, Vec<f32>>,
     threshold: f32,
 ) -> (f32, f32, f32, f32) {
-    let mut tp = 0;  // True Positive (동일인, 정확히 감지)
-    let mut tn = 0;  // True Negative (다인, 정확히 감지)
-    let mut fp = 0;  // False Positive (다인, 동일인으로 잘못 감지)
-    let mut fn_count = 0;  // False Negative (동일인, 다인으로 잘못 감지)
+    let mut tp = 0;
+    let mut tn = 0;
+    let mut fp = 0;
+    let mut fn_count = 0;
 
     for (path1, path2, is_same) in pairs {
         if let (Some(emb1), Some(emb2)) = (embeddings.get(path1), embeddings.get(path2)) {
@@ -270,28 +316,55 @@ fn evaluate_pairs(
 }
 
 fn main() -> std::io::Result<()> {
-    // let args: Vec<String> = std::env::args().collect();
-    //
-    // if args.len() < 2 {
-    //     println!("Usage: {} <input_size>", args[0]);
-    //     println!("Example: {} 320", args[0]);
-    //     println!("         {} 640", args[0]);
-    //     return Ok(());
-    // }
-    //
-    // let input_size: i32 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(320);
-    let input_size = 320;   // lfw image가    250x250 이므로 640은 적용하기 어려움
+    // 커맨드라인 인수 파싱
+    let args: Vec<String> = std::env::args().collect();
+
+    let detector_type = if args.len() > 1 {
+        DetectorType::from_str(&args[1]).unwrap_or_else(|| {
+            eprintln!("⚠️ 잘못된 검출기 타입: {}", args[1]);
+            eprintln!("사용법: {} <scrfd|retinaface> [input_size]", args[0]);
+            eprintln!("기본값: scrfd 사용");
+            DetectorType::SCRFD
+        })
+    } else {
+        eprintln!("사용법: {} <scrfd|retinaface> [input_size]", args[0]);
+        eprintln!("예제:");
+        eprintln!("  {} scrfd 320", args[0]);
+        eprintln!("  {} retinaface 640", args[0]);
+        eprintln!("\n기본값: scrfd, input_size=320");
+        DetectorType::SCRFD
+    };
+
+    let input_size = if args.len() > 2 {
+        args[2].parse::<i32>().unwrap_or(320)
+    } else {
+        320
+    };
 
     println!("=== 얼굴 인식 성능 평가 ===");
-    println!("Input size: {}", input_size);
+    println!("검출기: {}", detector_type.as_str());
+    println!("입력 크기: {}", input_size);
 
     // 모델 로드
     let mut blaze = BlazeFaceModel::new("models/blaze.onnx", 0.5, 0.3, 2).unwrap();
-    let mut scrfd = SCRFDDetector::new("models/det_500m.onnx", 0.5, 0.25, input_size).unwrap();
     let mut arcface = ArcFaceModel::new("models/w600k_mbf.onnx").unwrap();
 
-    let pairs = parse_pairs_correct("lfw/pairs.csv");
+    // 선택한 검출기 로드
+    let mut scrfd_opt = None;
+    let mut retina_opt = None;
 
+    match detector_type {
+        DetectorType::SCRFD => {
+            println!("🔄 SCRFD 모델 로드 중...");
+            scrfd_opt = Some(SCRFDDetector::new("models/det_500m.onnx", 0.5, 0.25, input_size).unwrap());
+        }
+        DetectorType::RetinaFace => {
+            println!("🔄 RetinaFace 모델 로드 중...");
+            retina_opt = Some(RetinaFace::new("models/retinaface-resnet50.onnx", 0.5, 0.25, input_size).unwrap());
+        }
+    }
+
+    let pairs = parse_pairs_correct("lfw/pairs.csv");
     println!("총 쌍의 수: {}", pairs.len());
 
     // 모든 이미지에서 임베딩 추출
@@ -304,9 +377,18 @@ fn main() -> std::io::Result<()> {
             if !embeddings.contains_key(path) {
                 let full_path = format!("{}", path);
 
-                match extract_embedding(&full_path, &mut blaze, &mut scrfd, &mut arcface) {
-                    Some(embedding) => {
-                        embeddings.insert(path.clone(), embedding);
+                let embedding = match detector_type {
+                    DetectorType::SCRFD => {
+                        extract_embedding_scrfd(&full_path, &mut blaze, scrfd_opt.as_mut().unwrap(), &mut arcface)
+                    }
+                    DetectorType::RetinaFace => {
+                        extract_embedding_retina(&full_path, &mut blaze, retina_opt.as_mut().unwrap(), &mut arcface)
+                    }
+                };
+
+                match embedding {
+                    Some(emb) => {
+                        embeddings.insert(path.clone(), emb);
                         processed += 1;
                     }
                     None => {
@@ -328,7 +410,8 @@ fn main() -> std::io::Result<()> {
 
     // 성능 평가
     let thresholds = vec![0.4, 0.45, 0.5, 0.55, 0.6, 0.65];
-    let mut results_file = File::create(format!("results_{}.csv", input_size))?;
+    let output_filename = format!("results_{}_{}.csv", detector_type.as_str().to_lowercase(), input_size);
+    let mut results_file = File::create(&output_filename)?;
     writeln!(results_file, "Threshold,Accuracy,Precision,Recall,F1")?;
 
     println!("\n=== 성능 평가 (Threshold별) ===");
@@ -340,6 +423,6 @@ fn main() -> std::io::Result<()> {
                  threshold, accuracy, precision, recall, f1)?;
     }
 
-    println!("\n✅ 결과가 results_{}.csv에 저장되었습니다.", input_size);
+    println!("\n✅ 결과가 {}에 저장되었습니다.", output_filename);
     Ok(())
 }
