@@ -7,9 +7,9 @@
     * Inputs:<br>
       input: [1, 128, 128, 3]    // 배치(단일이미지처리), 가로, 세로, 채널(RGB)
     * Outputs:<br>
-      regressors: [1, 896, 16]    // 단일이미지, 앵커박스수, 16 얼굴좌표영역[4] + 얼굴키폰인트(x,y) 6쌍 [12]<br>
+      * regressors: [1, 896, 16]    // 단일이미지, 앵커박스수, 16 얼굴좌표영역[4] + 얼굴키폰인트(x,y) 6쌍 [12]<br>
         얼굴 키포인트: 왼쪽눈, 오른쪽눈, 코, 입, 왼쪽귀, 오른쪽 귀<br>
-      classificators: [1, 896, 1] // 단일이미지, 앵커박스수, 신뢰도
+      * classificators: [1, 896, 1] // 단일이미지, 앵커박스수, 신뢰도
 * https://huggingface.co/garavv/blazeface-onnx (blaze.onnx)
   
 ### Insightface  (Landmark + Recognition)
