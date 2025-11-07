@@ -76,11 +76,29 @@ fn extract_embedding(
     let margin_x = (scaled_bbox.width as f32 * margin_ratio) as i32;
     let margin_y = (scaled_bbox.height as f32 * margin_ratio) as i32;
 
+    // 우선 여유를 포함한 확장된 크기 계산
+    let new_width = scaled_bbox.width + 2 * margin_x;
+    let new_height = scaled_bbox.height + 2 * margin_y;
+
+    // width, height 중 큰 값을 사용해 정사각형으로 만들기
+    let max_side = new_width.max(new_height);
+
+    // 정사각형이 중심을 유지하도록 x, y 조정
+    let center_x = scaled_bbox.x + scaled_bbox.width / 2;
+    let center_y = scaled_bbox.y + scaled_bbox.height / 2;
+
+    let new_x = (center_x - max_side / 2).max(0);
+    let new_y = (center_y - max_side / 2).max(0);
+
+    // 이미지 범위를 벗어나지 않게 조정
+    let new_x = new_x.min(orig_width as i32 - max_side);
+    let new_y = new_y.min(orig_height as i32 - max_side);
+
     let expanded_bbox = opencv::core::Rect::new(
-        (scaled_bbox.x - margin_x).max(0),
-        (scaled_bbox.y - margin_y).max(0),
-        (scaled_bbox.width + 2 * margin_x).min(orig_width as i32 - scaled_bbox.x),
-        (scaled_bbox.height + 2 * margin_y).min(orig_height as i32 - scaled_bbox.y),
+        new_x,
+        new_y,
+        max_side.min(orig_width as i32 - new_x),
+        max_side.min(orig_height as i32 - new_y),
     );
 
     // 크롭
