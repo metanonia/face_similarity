@@ -106,7 +106,7 @@ fn extract_embedding(
     src.roi(expanded_bbox).ok()?.copy_to(&mut cropped).ok()?;
 
     // SCRFD 랜드마크 감지
-    let landmark_detects = scrfd.detect(&cropped).ok()?;
+    let landmark_detects = scrfd.detect(&src).ok()?;
     // println!("  🎯 SCRFD 감지: {}개", landmark_detects.len());
     if landmark_detects.is_empty() {
         eprintln!("No landmarks found");
@@ -116,7 +116,7 @@ fn extract_embedding(
     let landmark = &landmark_detects[0];
 
     // 정렬 및 임베딩 추출
-    let aligned = FaceAlign::norm_crop(&cropped, &landmark.landmarks, 112).ok()?;
+    let aligned = FaceAlign::norm_crop(&src, &landmark.landmarks, 112).ok()?;
     let safe_bbox = opencv::core::Rect::new(0, 0, 112, 112);
     let embedding = arcface.embbeding(&aligned, safe_bbox).ok()?;
     Some(embedding)
