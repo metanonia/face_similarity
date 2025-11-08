@@ -1,3 +1,10 @@
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+//
+// This module implements a compare between scrfd & retinaface
+
 use std::path::Path;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};

@@ -1,3 +1,14 @@
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+//
+
+//! # retina_model
+//!
+//! This module implements face landmark detection using the retinaface model via ONNX Runtime.
+//! Models: retinaface-resnet50.onnx
+
 use opencv::{
     core::{self, Mat, Point2f, Scalar, Size, Vector},
     dnn::{self, Net},

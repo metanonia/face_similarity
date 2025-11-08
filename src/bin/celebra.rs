@@ -1,3 +1,12 @@
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+//
+// This module implements a face similarity performance test model
+// using the CelebA dataset samples.
+// The model calculates embeddings and compares facial similarity scores
+
 use std::io::Write;
 use std::collections::HashMap;
 use std::env;

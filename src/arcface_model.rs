@@ -1,3 +1,13 @@
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+
+//! # arcface_model
+//!
+//! This module implements face  embedding using the arcface model via ONNX Runtime.
+//! Models: w600k_mbf.onnx
+
 use opencv::{
     core::{Mat, Scalar, Size, Vector},
     imgcodecs, imgproc,

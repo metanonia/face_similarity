@@ -1,3 +1,13 @@
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+
+//! # blaze_model
+//!
+//! This module implements face  detection using the blazeface model via ONNX Runtime.
+//! Models: blaze.onnx
+
 use opencv::core::{no_array, AlgorithmHint, Mat, Point2f, Scalar, Size, BORDER_CONSTANT};
 use opencv::imgproc;
 use opencv::prelude::*;

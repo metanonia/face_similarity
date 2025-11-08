@@ -7,6 +7,7 @@
 //! - Face alignment using 5-point landmarks (norm_crop)
 //! - Affine transformation matrix calculation (estimate_norm)
 //! - Point transformation (trans_points_2d, trans_points_3d)
+
 use opencv::{
     core::{self, Mat, Point2f, MatTrait},
     imgproc,

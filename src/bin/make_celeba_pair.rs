@@ -1,3 +1,10 @@
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+//
+// make test sample pair using CelebA images
+
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};

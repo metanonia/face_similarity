@@ -1,8 +1,13 @@
-//! SCRFD (Sample and Computation Redistribution for Efficient Face Detection) Detector Module
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+
+//! # scrfd_model
 //!
-//! This module implements face detection using the SCRFD-500M model via ONNX Runtime.
-//! Models: det_500m.onnx (InsightFace)
-//!
+//! This module implements face landmark detection using the SCRFD-500M model via ONNX Runtime.
+// Models: det_500m.onnx
+
 use opencv::{
     core::{self, Mat, Point2f, Rect, Size, CV_32F},
     imgproc,

@@ -1,7 +1,16 @@
-use std::path::Path;
+// Copyright (c) 2025 metanonia
+//
+// This source code is licensed under the MIT License.
+// See the LICENSE file in the project root for license terms.
+//
+// This module implements a face similarity performance test model
+// using the Labeled Faces in the Wild (LFW) dataset samples.
+// The model calculates embeddings and compares facial similarity scores
+
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
 use std::collections::HashMap;
+use std::path::Path;
 use opencv::{imgcodecs, imgproc, Result};
 use opencv::core::{Mat, Size, Vector};
 use opencv::prelude::MatTraitConst;
