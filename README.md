@@ -53,4 +53,8 @@
 * detector: scrfd/retinaface 비교
   * cargo run --bin detector scrfd/retinaface  320/640
 * voxceleb2 https://huggingface.co/datasets/ProgramComputer/voxceleb/tree/main/vox2
-  * mp4 자료만 다운로드
+  * mp4(테스트용) 자료만 다운로드 받아서 사용 (vox/test_mp4)
+  * cargo run --bin vox
+* DukeMTMC-VideoReID: https://github.com/Yu-Wu/DukeMTMC-VideoReID
+  * Dataset Download: https://drive.google.com/file/d/1qIadJTpY3Wpvsubui2c4jIQTUhAWA1-y/view
+  * mtmc에 데이터셋 복사
