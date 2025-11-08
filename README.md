@@ -42,6 +42,14 @@
     * Outputs:<br>
       516: [1, 512]
 
+### RetinaFace
+  * Inputs:<br>
+    input: [0, 3, 0, 0] 색상(RGB)<br>
+  * Outputs:<br>
+    bbox: [1, 0, 4]  각 앵커 중심점에서 부터의 회귀값 <br>
+    confidence: [1, 0, 2] 앵커에 대한 클래스 분류 점수 (0: 배경, 1: 얼굴)<br>
+    landmark: [1, 0, 10] 5개 랜드마 (왼쪽눈, 오른쪽눈, 코, 왼쪽 입꼬리, 오른쪽 입꼬리)<br>
+
 ### [ TEST ]
 * lfw: https://www.kaggle.com/datasets/jessicali9530/lfw-dataset?resource=download
   * lfw 폴더 생성하여 해당 자료 추가
@@ -55,6 +63,7 @@
 * voxceleb2 https://huggingface.co/datasets/ProgramComputer/voxceleb/tree/main/vox2
   * mp4(테스트용) 자료만 다운로드 받아서 사용 (vox/test_mp4)
   * cargo run --bin vox
-* DukeMTMC-VideoReID: https://github.com/Yu-Wu/DukeMTMC-VideoReID
-  * Dataset Download: https://drive.google.com/file/d/1qIadJTpY3Wpvsubui2c4jIQTUhAWA1-y/view
-  * mtmc에 데이터셋 복사
+  
+### [ OUTHERS ]
+* 300W https://ibug.doc.ic.ac.uk/resources/facial-point-annotations/
+* Ted-Talks-Video-Downloader https://github.com/prateekralhan/Ted-Talks-Video-Downloader
