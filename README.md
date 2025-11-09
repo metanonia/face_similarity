@@ -63,7 +63,11 @@
 * voxceleb2 https://huggingface.co/datasets/ProgramComputer/voxceleb/tree/main/vox2
   * mp4(테스트용) 자료만 다운로드 받아서 사용 (vox/test_mp4)
   * cargo run --bin vox
+
   
 ### [ OUTHERS ]
 * 300W https://ibug.doc.ic.ac.uk/resources/facial-point-annotations/
-* Ted-Talks-Video-Downloader https://github.com/prateekralhan/Ted-Talks-Video-Downloader
+
+### [ Python]
+* samples/youtube_downloader <youtube video id>
+  * 유튜브 동영상 다운로드
